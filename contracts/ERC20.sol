@@ -1,3 +1,4 @@
+//This if for purpose of testing
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -17,5 +18,3 @@ contract MyToken is ERC20Upgradeable {
         _mint(to, amount * 10 ** 18);
     }
 }
-//busd: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-//meto: 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9

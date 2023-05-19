@@ -19,24 +19,24 @@ error Staking__TransferFailed();
 error Staking__NotEnoughAllowance();
 
 /* @dev
-
+TESTs DONE = V
 _V__1. ERC20:           CREATE one token for METO, mint for three adresses
 _V__2. ERC751 NFT:      create two, one for LAND and one for METAHUT, mint for three addresses
 _V__3. STAKE:           ORDINARY
 _V__4. CLAIM:
 _V__5. STAKE:           LAND
 _V__6. CLAIM:
-___7. STAKE:           METAHUT
-___8. CLAIM:
+_V__7. STAKE:           METAHUT
+_V__8. CLAIM:
 _V__9. STAKE:           LEVEL
 _V__10. CLAIM:
-___11. ADMIN:           SET & UNSET
-___12. CLAIM BEFORE DEADLINE
-___13. CLAIM EARLY & CHECK PENALTY
+_V__11. ADMIN:           SET & UNSET
+_V__12. CLAIM BEFORE DEADLINE
+_V__13. CLAIM EARLY & CHECK PENALTY
 
 */
 
-contract PrevilagedStaking is Initializable, OwnableUpgradeable {
+contract Staking is Initializable, OwnableUpgradeable {
     IERC20Upgradeable public token;
     IERC721Upgradeable public land;
     IERC721Upgradeable public metahut;
@@ -46,28 +46,18 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
     uint256 public totalStakedLand;
     uint256 public totalStakedMetahut;
 
-    uint256 public REWARD_PERCENTAGE;
-    uint256 public REWARD_PERCENTAGE_LAND;
-    uint256 public REWARD_PERCENTAGE_METAHUT;
-    uint256 public PENALTY_PERCENTAGE;
-    // uint256 public constant REWARD_DEADLINE_SECONDS =  3600 * 24 * 30 * 3; // 3 months
-    uint256 public REWARD_DEADLINE_SECONDS; // 3 months
+    uint256 public rewardPercentage;
+    uint256 public rewardPercentageLand;
+    uint256 public rewardPercentageMetahut;
+    uint256 public penaltyPercentage;
+    uint256 public rewardDeadlineSeconds;
 
-    uint256 public POOL_MAX_SIZE; // * 10e18;
-    uint256 public MIN_STAKING_AMOUNT; // * 10e18;
-    uint256 public MAX_STAKING_AMOUNT; // * 10e18;
-    uint256 public PENALTY_DIVISION_STEP; //0 * 3;
+    uint256 public poolMaxSize;
+    uint256 public minStakingAmount;
+    uint256 public maxStakingAmount;
+    uint256 public penaltyDivisionStep;
 
-    // address public constant TOKEN_CONTRACT_ADDRESS =
-    //     0xcD6a42782d230D7c13A74ddec5dD140e55499Df9; //TODO: This addresses are not valid
-    // address public constant LAND_CONTRACT_ADDRESS =
-    //     0x9d83e140330758a8fFD07F8Bd73e86ebcA8a5692;
-    // address public constant METAHUT_CONTRACT_ADDRESS =
-    //     0x7b96aF9Bd211cBf6BA5b0dd53aa61Dc5806b6AcE;
-    // address public levelContract = 0xe2899bddFD890e320e643044c6b95B9B0b84157A;
-    address public TOKEN_CONTRACT_ADDRESS; //TODO: This addresses are not valid
-    address public LAND_CONTRACT_ADDRESS;
-    address public METAHUT_CONTRACT_ADDRESS;
+    address public address(metahut);
 
     enum NftType {
         NONE,
@@ -90,13 +80,13 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
         uint256 percent;
         uint256 stakedAt;
     }
-    mapping(address => bool) private admins;
-    mapping(address => Staking[]) private stakings;
+    mapping(address => bool) public admins;
+    mapping(address => Staking[]) public stakings;
     mapping(NftType => IERC721Upgradeable) internal _typeToNft;
-    mapping(address => mapping(uint256 => address)) private owners;
-    mapping(address => mapping(address => uint256[])) private ownings;
+    mapping(address => mapping(uint256 => address)) public owners;
+    mapping(address => mapping(address => uint256[])) public ownings;
     mapping(address => bool) private _nonReentrant;
-    mapping(uint64 => uint256) private levelReward;
+    mapping(uint64 => uint256) public levelReward;
 
     event Stake(address indexed staker, Staking staking);
     event Claim(address indexed staker, Staking staking);
@@ -104,16 +94,14 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
     // Modifiers
 
     modifier stakeAvailable(address _staker, uint256 _amount) {
-        if (_amount < MIN_STAKING_AMOUNT)
+        if (_amount < minStakingAmount)
             revert Staking__NotAvailable({amount: _amount});
-        if (totalStakedToken + _amount > POOL_MAX_SIZE)
+        if (totalStakedToken + _amount > poolMaxSize)
             revert Staking__NotAvailable({amount: totalStakedToken + _amount});
         if (stakeStatus != StakeStatus.ACTIVE)
             revert Staking__StatusNotActive();
-        if (
-            getUserTotalStakedTokenAmount(_staker) + _amount >
-            MAX_STAKING_AMOUNT
-        ) revert Staking__NotAvailable({amount: _amount});
+        if (getUserTotalStakedTokenAmount(_staker) + _amount > maxStakingAmount)
+            revert Staking__NotAvailable({amount: _amount});
         _;
     }
 
@@ -138,28 +126,23 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
     ) public initializer {
         __Ownable_init();
         admins[msg.sender] = true;
-        //TODO: stakeStatus = StakeStatus.ACTIVE;
         token = IERC20Upgradeable(_token);
-        TOKEN_CONTRACT_ADDRESS = _token;
         land = IERC721Upgradeable(_land);
-        LAND_CONTRACT_ADDRESS = _land;
         metahut = IERC721Upgradeable(_metahut);
-        METAHUT_CONTRACT_ADDRESS = _metahut;
         _typeToNft[NftType.LAND] = land;
         _typeToNft[NftType.METAHUT] = metahut;
         levels = ILevels(_levels);
 
-        REWARD_PERCENTAGE = 10;
-        REWARD_PERCENTAGE_LAND = 20;
-        REWARD_PERCENTAGE_METAHUT = 30;
-        PENALTY_PERCENTAGE = 10;
-        // uint256 public constant REWARD_DEADLINE_SECONDS =  3600 * 24 * 30 * 3; // 3 months
-        REWARD_DEADLINE_SECONDS = 60; // 3 months
+        rewardPercentage = 10;
+        rewardPercentageLand = 20;
+        rewardPercentageMetahut = 30;
+        penaltyPercentage = 10;
+        rewardDeadlineSeconds = 3600 * 24 * 30 * 3; // 3 months
 
-        POOL_MAX_SIZE = 20_000_000; // * 10e18;
-        MIN_STAKING_AMOUNT = 20_000; // * 10e18;
-        MAX_STAKING_AMOUNT = 500_000; // * 10e18;
-        PENALTY_DIVISION_STEP = 3; //0 * 3;
+        poolMaxSize = 20_000_000 * 10e18;
+        minStakingAmount = 20_000 * 10e18;
+        maxStakingAmount = 500_000 * 10e18;
+        penaltyDivisionStep = 30 * 3;
     }
 
     function stake(
@@ -244,17 +227,17 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
         } else if (nftType == NftType.LAND) {
             land.transferFrom(sponsor, address(this), nftId);
             totalStakedLand += 1;
-            owners[LAND_CONTRACT_ADDRESS][nftId] = staker;
-            ownings[LAND_CONTRACT_ADDRESS][staker].push(nftId);
-            staking.percent = REWARD_PERCENTAGE_LAND;
+            owners[address(land)][nftId] = staker;
+            ownings[address(land)][staker].push(nftId);
+            staking.percent = rewardPercentageLand;
         } else if (nftType == NftType.METAHUT) {
             metahut.transferFrom(sponsor, address(this), nftId);
             totalStakedMetahut += 1;
-            owners[METAHUT_CONTRACT_ADDRESS][nftId] = staker;
-            ownings[METAHUT_CONTRACT_ADDRESS][staker].push(nftId);
-            staking.percent = REWARD_PERCENTAGE_METAHUT;
+            owners[address(metahut)][nftId] = staker;
+            ownings[address(metahut)][staker].push(nftId);
+            staking.percent = rewardPercentageMetahut;
         } else {
-            staking.percent = REWARD_PERCENTAGE;
+            staking.percent = rewardPercentage;
         }
         stakings[staker].push(staking);
         emit Stake(staker, staking);
@@ -280,11 +263,11 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
 
         if (staking.nftType == NftType.LAND) {
             land.transferFrom(address(this), staker, staking.nftId);
-            _remove(staker, index, staking.nftId, LAND_CONTRACT_ADDRESS);
+            _remove(staker, index, staking.nftId, address(land));
             totalStakedLand -= 1;
         } else if (staking.nftType == NftType.METAHUT) {
             metahut.transferFrom(address(this), staker, staking.nftId);
-            _remove(staker, index, staking.nftId, METAHUT_CONTRACT_ADDRESS);
+            _remove(staker, index, staking.nftId, address(metahut));
             totalStakedMetahut -= 1;
         } else {
             _remove(staker, index, staking.nftId, address(0));
@@ -299,10 +282,10 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
         uint256 amount,
         uint256 secondsStaked
     ) internal view returns (uint) {
-        uint256 chunkSize = REWARD_DEADLINE_SECONDS / PENALTY_DIVISION_STEP;
-        uint256 chunkPercent = (PENALTY_PERCENTAGE * 10e10) /
-            PENALTY_DIVISION_STEP;
-        uint256 percent = PENALTY_PERCENTAGE *
+        uint256 chunkSize = rewardDeadlineSeconds / penaltyDivisionStep;
+        uint256 chunkPercent = (penaltyPercentage * 10e10) /
+            penaltyDivisionStep;
+        uint256 percent = penaltyPercentage *
             10e10 -
             ((secondsStaked / chunkSize) * chunkPercent);
         return amount - (((amount * percent) / 100) / 10e10);
@@ -331,7 +314,7 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
         Staking memory staking = stakings[_staker][_index];
         uint256 timestamp = block.timestamp;
         uint256 secondsStaked = timestamp - staking.stakedAt;
-        if (secondsStaked < REWARD_DEADLINE_SECONDS) {
+        if (secondsStaked < rewardDeadlineSeconds) {
             return (_getPenalty(staking.amount, secondsStaked), staking.amount);
         }
         return ((staking.amount * staking.percent) / 100, staking.amount);
@@ -382,7 +365,7 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
         Staking memory staking = stakings[msg.sender][_index];
         uint256 timestamp = block.timestamp;
         uint256 secondsStaked = timestamp - staking.stakedAt;
-        if (secondsStaked < REWARD_DEADLINE_SECONDS) {
+        if (secondsStaked < rewardDeadlineSeconds) {
             return (_getPenalty(staking.amount, secondsStaked), staking.amount);
         }
         return ((staking.amount * staking.percent) / 100, staking.amount);
@@ -440,6 +423,6 @@ contract PrevilagedStaking is Initializable, OwnableUpgradeable {
     //TESTING FUNCS
 
     function redoRewardDedline(uint256 deadline) public {
-        REWARD_DEADLINE_SECONDS = deadline;
+        rewardDeadlineSeconds = deadline;
     }
 }
